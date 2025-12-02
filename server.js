@@ -8,6 +8,9 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const APP_PASSWORD = process.env.APP_PASSWORD || '';
+const AUTH_SECRET = process.env.AUTH_SECRET || 'practice-rings-secret';
+
 // 本機開發用專案根目錄，Zeabur 上用環境變數指定的路徑
 const DATA_FILE_PATH =
   process.env.DATA_FILE_PATH || path.join(__dirname, 'progress.json');
@@ -50,8 +53,81 @@ function writeDataFile(data) {
   fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// token 工具和 auth middleware
+const crypto = require('crypto');
+
+function generateToken() {
+  // 單人用：只要可驗證、難猜就好
+  const payload = {
+    ts: Date.now(),
+  };
+  const raw = JSON.stringify(payload);
+  const sig = crypto
+    .createHmac('sha256', AUTH_SECRET)
+    .update(raw)
+    .digest('hex');
+  return Buffer.from(`${raw}.${sig}`).toString('base64');
+}
+
+function verifyToken(token) {
+  try {
+    const decoded = Buffer.from(token, 'base64').toString('utf8');
+    const [raw, sig] = decoded.split('.');
+    if (!raw || !sig) return false;
+    const expected = crypto
+      .createHmac('sha256', AUTH_SECRET)
+      .update(raw)
+      .digest('hex');
+    if (expected !== sig) return false;
+    const payload = JSON.parse(raw);
+    // 可選：加上過期時間檢查，例如 30 天
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    if (Date.now() - payload.ts > THIRTY_DAYS) return false;
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function authMiddleware(req, res, next) {
+  const header = req.headers.authorization || '';
+  const [scheme, token] = header.split(' ');
+  if (scheme !== 'Bearer' || !token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const ok = verifyToken(token);
+  if (!ok) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  next();
+}
+
+// 登入路由
+app.post('/api/login', (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (!APP_PASSWORD) {
+      return res.status(500).json({
+        error: 'Server misconfigured',
+        message: 'APP_PASSWORD is not set',
+      });
+    }
+    if (!password || password !== APP_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    const token = generateToken();
+    res.json({ token });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // 取得設定
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', authMiddleware, (req, res) => {
   try {
     const data = readDataFile();
     res.json(data.settings);
@@ -65,7 +141,7 @@ app.get('/api/settings', (req, res) => {
 });
 
 // 更新設定
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', authMiddleware, (req, res) => {
   try {
     const { codingGoalMinutes, readingGoalMinutes, writingGoalMinutes } = req.body;
 
@@ -90,7 +166,7 @@ app.post('/api/settings', (req, res) => {
 });
 
 // 取得指定日期的進度
-app.get('/api/progress', (req, res) => {
+app.get('/api/progress', authMiddleware, (req, res) => {
   try {
     const { date } = req.query;
 
@@ -121,7 +197,7 @@ app.get('/api/progress', (req, res) => {
 });
 
 // 取得最近 N 天的進度
-app.get('/api/progress/recent', (req, res) => {
+app.get('/api/progress/recent', authMiddleware, (req, res) => {
   try {
     const days = Number(req.query.days) || 7;
     const today = new Date();
@@ -166,7 +242,7 @@ app.get('/api/progress/recent', (req, res) => {
 
 
 // 建立或更新單日進度
-app.post('/api/progress', (req, res) => {
+app.post('/api/progress', authMiddleware, (req, res) => {
   try {
     const {
       date,

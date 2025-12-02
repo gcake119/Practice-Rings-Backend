@@ -1,4 +1,6 @@
 # Practice Rings（修煉圈圈）SDD
+**Version:** 1.2.0  
+**Last Updated:** 2025-12-02  10:02 PM GMT+8
 
 ## 1. 專案概述
 
@@ -20,16 +22,30 @@
 
 ## 2. 功能需求
 
-### 2.1 使用者角色
+### 2.1 使用者角色（更新）
 
 - Individual Learner（單人使用者）
-  - 目前僅支援「單一使用者」，無帳號系統。
-  - 一個部署對應一份個人練習紀錄。
-- 未來擴充（登入機制）：
-  - 之後可在此基礎上加入「登入機制」確保只有本人可使用：
-    - 簡單版：在前端輸入一組個人密碼或 token，後端用環境變數比對通過才允許存取資料。
-    - 正式版：加入 JWT / OAuth 登入，或使用 Google 帳號登入。
-  - API 介面保持不變，將 userId / token 當作額外欄位傳入。
+  - 仍然以「單一使用者」為主，一個部署對應一份個人練習紀錄。
+
+- Login User（登入使用者）
+  - 專案現在引入「登入狀態」：
+    - 未登入使用者：
+      - 只能看到登入畫面／登入區塊。
+      - 無法呼叫任何進度相關 API，也不會讀寫 `progress.json`。
+    - 已登入使用者：
+      - 成功登入後才能呼叫 `/api/settings`、`/api/progress` 相關 API。
+      - 所有對 Zeabur Volume 上 `progress.json` 的讀寫都必須經過驗證。
+  - 登入方式（v1）：
+    - 使用單一共享密碼（或個人 access token）作為保護機制。
+    - 前端提供密碼輸入欄位，呼叫 `POST /api/login`。
+    - 後端從環境變數（例如 `APP_PASSWORD`）讀取正確密碼：
+      - 密碼正確 → 產生一個簽章 token，回傳給前端。
+      - 密碼錯誤 → 回傳 401。
+    - 前端將 token 儲存在 `localStorage`，之後所有 API 呼叫都透過 HTTP header 帶上：
+      - `Authorization: Bearer <token>`。
+    - 後端會在讀寫 `progress.json` 前驗證 token，未通過一律回應 401。
+
+>註：這個版本仍是「單人工具」，只是加了一層鎖，未來若要支援多使用者，可以在這一層上再擴充 userId。
 
 ### 2.2 核心功能
 
@@ -72,7 +88,7 @@
     - `todayMinutes[mode] += elapsedMinutes`。
     - `timerPausedElapsedMs` 歸零。
 
-#### 2.2.3 每日紀錄管理
+### 2.2.3 每日紀錄管理（更新）
 
 - 今日資料結構：
   - `date`: `YYYY-MM-DD`。
@@ -80,16 +96,32 @@
   - `readingMinutes`: number。
   - `writingMinutes`: number。
   - `note`: string（可簡短描述今日重點）。
+
 - 功能：
   - 載入頁面時：
-    - 從後端取得今天紀錄。
-    - 若不存在，回傳預設值（0 分鐘＋空 note）。
+    - 若已登入：
+      - 從後端取得今天紀錄。
+      - 若不存在，回傳預設值（0 分鐘＋空 note）。
+    - 若未登入：
+      - 不呼叫任何進度 API，只顯示登入畫面。
   - 模式計時器：
     - 每結束一段計時，會自動更新該模式累積分鐘數並立即同步到後端（僅時間，不包含 note）。
-  - 手動調整（未來可加）：
-    - 目前 UI 不提供直接輸入分鐘數，之後可加輸入框或加減按鈕覆寫今日分鐘。
+  - 手動輸入時間區間（新增）：
+    - 使用者可以在「今日摘要」區塊中，針對每個模式輸入多段時間區間：
+      - 介面：`startTime` 與 `endTime`，格式為 `HH:MM`。
+      - 範例：`09:30` → `10:15` 代表 45 分鐘。
+    - 前端行為：
+      - 檢查 `endTime` 是否晚於 `startTime`，否則顯示錯誤訊息。
+      - 將時間字串換算成分鐘差 `deltaMinutes`。
+      - 將 `deltaMinutes` 累加到對應的 `todayMinutes[mode]`。
+      - 呼叫 `saveTodayMinutesOnly()`，把最新的分鐘數同步到後端（不動 note）。
+    - 手動輸入與計時器的關係：
+      - 計時器結束時會自動儲存該段時間。
+      - 手動輸入完成時也會儲存。
+      - 後端只關心每天三種模式的分鐘總和，不追蹤每段起訖。
+
   - 儲存今天（含 note）：
-    - 按「儲存今天 Save Today」按鈕時：
+    - 按「儲存今天 Save Today / 修改並儲存 Update & Save」按鈕時：
       - 若仍有尚未結束或暫停中的計時，會先結束並累加＋自動儲存時間。
       - 然後用「完整 body（時間＋ note）」呼叫後端，覆寫當日紀錄。
 
@@ -138,23 +170,33 @@
 
 ---
 
-## 3. 系統架構設計
+## 3. 系統架構設計（修改部分）
 
-### 3.1 整體架構
+### 3.1 整體架構（補充）
 
 - Client（Browser）：
   - `index.html` / `style.css` / `app.js`。
   - 負責：
     - UI 呈現（Doraemon 蠟筆風格）。
-    - 模式計時器。
+    - 模式計時器與手動時間區間輸入。
     - 三圈圈與最近 7 天同心圓繪製。
-    - 呼叫後端 API，同步目標設定與每日進度。
+    - 登入狀態管理：
+      - 維護 `isAuthenticated` 與 `token`。
+      - 將 token 儲存在 `localStorage`。
+      - 未登入時只顯示登入區塊，不呼叫進度相關 API。
+    - 呼叫後端 API，同步目標設定與每日進度（所有請求都附帶 Authorization header）。
+
 - Server（Node.js + Express）：
   - `server.js`。
   - RESTful API：
+    - 身分驗證：
+      - `POST /api/login`。
     - 取得 / 更新設定（每日目標）。
     - 取得 / 更新每日進度（時間＋ note）。
     - 取得最近 N 天紀錄。
+  - Auth middleware：
+    - 驗證來自前端的 `Authorization: Bearer <token>`。
+    - 未通過驗證者，一律回應 401 並拒絕讀寫 `progress.json`。
   - 讀寫 Zeabur Volume 上的 `progress.json` 檔案。
 
 ### 3.2 資料儲存結構（`progress.json`）
@@ -182,16 +224,42 @@
 }
 
 
-- 鍵設計：
+- key設計：
   - `settings`：單一物件，儲存全域目標設定。
   - `records`：以日期字串為 key 的物件，每一個 value 是該日紀錄物件。
 
 ---
 
-## 4. API 設計
+## 4. API 設計（新增與修改）
 
 Base URL（本機開發）：`http://localhost:3000`  
 Base URL（正式環境）：`https://<your-zeabur-domain>.zeabur.app`
+
+### 4.0 身分驗證相關（新增）
+
+#### POST `/api/login`
+
+- 描述：使用密碼登入，取得存取 token。
+- Request Body：
+
+{
+"password": "user-input-password"
+}
+
+
+- 行為：
+  - 從環境變數（例如 `APP_PASSWORD`）讀取正確密碼。
+  - 若 `password` 相符：
+    - 產生一個簽章 token（具備到期時間或隨機性）。
+    - 回傳 `{ "token": "<signed-token>" }`。
+  - 若不相符：
+    - 回傳 401 與錯誤訊息。
+
+- Response 200：
+
+{
+"token": "<signed-token>"
+}
 
 ### 4.1 設定相關
 
@@ -314,6 +382,26 @@ Base URL（正式環境）：`https://<your-zeabur-domain>.zeabur.app`
 }
 
 
+### 4.3 其餘 API 的授權規則
+
+以下路由皆為「受保護路由」，必須攜帶 `Authorization` header：
+
+- GET `/api/settings`
+- POST `/api/settings`
+- GET `/api/progress?date=YYYY-MM-DD`
+- GET `/api/progress/recent?days=7`
+- POST `/api/progress`
+
+共通授權規則：
+
+- Request header 需包含：
+
+Authorization: Bearer <token>
+
+- 伺服器會在進入 handler 前驗證 token：
+  - 驗證失敗或未提供 → 回傳 401，且不進行任何檔案讀寫。
+  - 驗證成功 → 執行原本邏輯。
+
 ---
 
 ## 5. 前端設計
@@ -333,6 +421,27 @@ Base URL（正式環境）：`https://<your-zeabur-domain>.zeabur.app`
   - `SDD.md`（本文件）
 
 ### 5.2 網頁區塊
+
+### 5.2.0 Login Section（新增）
+
+- 元件：
+  - 密碼輸入欄位（`<input type="password">`）。
+  - 「登入 Login」按鈕。
+- 行為：
+  - 使用者輸入密碼後按下登入：
+    - 呼叫 `POST /api/login`。
+    - 成功：
+      - 將回傳的 token 存入 `state.token` 與 `localStorage`。
+      - 設定 `state.isAuthenticated = true`。
+      - 呼叫 `init()` 載入設定與今日／歷史紀錄。
+    - 失敗：
+      - 顯示錯誤提示（例如 toast 或錯誤文字）。
+
+- 顯示邏輯：
+  - `isAuthenticated === false`：
+    - 僅顯示登入區塊（Timer / Rings / Summary / History 隱藏）。
+  - `isAuthenticated === true`：
+    - 顯示完整主畫面。
 
 #### 5.2.1 Header
 
@@ -374,7 +483,7 @@ Base URL（正式環境）：`https://<your-zeabur-domain>.zeabur.app`
 - 百分比計算：
   - `progress = min(currentMinutes / goalMinutes, 1)`。
 
-#### 5.2.4 Today Summary Section（今日摘要）
+#### 5.2.4 Today Summary Section（今日摘要擴充：時間區間輸入）
 
 - 元件：
   - 三個數字顯示：
@@ -390,6 +499,16 @@ Base URL（正式環境）：`https://<your-zeabur-domain>.zeabur.app`
     - 若有未結束或暫停中的計時，先完成本段計時（累加分鐘＋自動儲存時間）。
     - 使用完整 body（包含 note）呼叫 `/api/progress`。
     - 更新最近 7 天歷史畫面。
+- 在原有「今日摘要」區塊下方新增「手動時間輸入」子區塊：
+  - 每個模式（Coding / Reading / Writing）都有一組時間區間輸入：
+    - `startTime`：`<input type="time">`
+    - `endTime`：`<input type="time">`
+    - 「加入本日」按鈕：
+      - 讀取 `startTime` / `endTime`。
+      - 檢查 `endTime > startTime`，否則顯示錯誤。
+      - 計算分鐘差，累加至 `todayMinutes[mode]`。
+      - 呼叫 `saveTodayMinutesOnly()` 將分鐘數同步到後端。
+      - 視 UX 決策清空或保留輸入值。 
 
 #### 5.2.5 Recent History Section（最近 N 天）
 
@@ -418,12 +537,12 @@ Base URL（正式環境）：`https://<your-zeabur-domain>.zeabur.app`
 ### 6.1 主要狀態
 
 const state = {
-currentDate: '', // 'YYYY-MM-DD'
-currentMode: null, // 'coding' | 'reading' | 'writing' | null
+currentDate: '',
+currentMode: null,
 timerRunning: false,
 timerStartTime: null,
 timerIntervalId: null,
-timerPausedElapsedMs: 0, // 暫停前已累積毫秒數
+timerPausedElapsedMs: 0,
 todayMinutes: {
 coding: 0,
 reading: 0,
@@ -435,11 +554,34 @@ reading: 90,
 writing: 30,
 },
 note: '',
-recentRecords: [], // 最近 N 天紀錄（含 date 與三種分鐘數）
+recentRecords: [],
+isAuthenticated: false,
+token: '',
+manualTime: {
+coding: { start: '', end: '' },
+reading: { start: '', end: '' },
+writing: { start: '', end: '' },
+},
 };
 
 
 ### 6.2 主要函式與流程
+
+- 新增 login() 函式：
+  - 送出 POST /api/login。
+  - 取得 token 後：
+    - 設定 state.isAuthenticated = true，state.token = token。
+    - 存入 localStorage。
+    - 呼叫 init() 進入原本資料載入流程。
+
+- `login(password)`
+  - 呼叫 `POST /api/login`。
+  - 成功：
+    - 寫入 `state.token` 與 `localStorage`。
+    - 設定 `state.isAuthenticated = true`。
+    - 呼叫 `init()`。
+  - 失敗：
+    - 顯示錯誤訊息。
 
 - `init()`
   - 取得今日日期並填入 `state.currentDate`。
@@ -551,11 +693,24 @@ recentRecords: [], // 最近 N 天紀錄（含 date 與三種分鐘數）
     - 空白則標「儲存今天 Save Today」。
     - 有內容則標「修改並儲存 Update & Save」。
 
+- `addManualTime(mode)`
+  - 讀取 `state.manualTime[mode].start` / `end`。
+  - 檢查 `end > start`。
+  - 轉換為分鐘差 `deltaMinutes`，累加到 `state.todayMinutes[mode]`。
+  - 呼叫 `saveTodayMinutesOnly()`。
+  - 重新渲染今日數字與三圈圈。
+
 - 其他：
   - todayNote textarea 綁定 input 事件，及時同步 state.note 與按鈕文字。
   - 儲存按鈕點擊時：
     - 自動先結束本日所有未停計時段。
     - 執行完整儲存（時間＋note），成功時給予成功提示並刷新歷史記錄。
+
+- 所有 fetch 呼叫補上 Authorization header：
+
+const headers = {
+'Content-Type': 'application/json',
+};
 
 ---
 
