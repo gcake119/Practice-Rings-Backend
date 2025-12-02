@@ -8,8 +8,9 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 檔案路徑
-const DATA_FILE_PATH = path.join(__dirname, 'progress.json');
+// 本機開發用專案根目錄，Zeabur 上用環境變數指定的路徑
+const DATA_FILE_PATH =
+  process.env.DATA_FILE_PATH || path.join(__dirname, 'progress.json');
 
 // Middleware
 app.use(cors());
