@@ -1,0 +1,40 @@
+{
+  "settings": {
+    "codingGoalMinutes": 180,
+    "readingGoalMinutes": 90,
+    "writingGoalMinutes": 30
+  },
+  "records": {
+    "2025-12-01": {
+      "codingMinutes": 120,
+      "readingMinutes": 45,
+      "writingMinutes": 20,
+      "note": "完成 Q7，整理字串與陣列操作差異。"
+    },
+    "2025-12-02": {
+      "date": "2025-12-02",
+      "codingMinutes": 180,
+      "readingMinutes": 90,
+      "writingMinutes": 40,
+      "note": ""
+    },
+    "2025-11-29": {
+      "codingMinutes": 60,
+      "readingMinutes": 30,
+      "writingMinutes": 15,
+      "note": "暖身刷題與閱讀 MDN 迴圈教學。"
+    },
+    "2025-11-28": {
+      "codingMinutes": 30,
+      "readingMinutes": 20,
+      "writingMinutes": 10,
+      "note": "簡單回顧前幾題邏輯，調整命名。"
+    },
+    "2025-11-27": {
+      "codingMinutes": 0,
+      "readingMinutes": 45,
+      "writingMinutes": 30,
+      "note": "純閱讀語言機制章節與寫學習筆記。"
+    }
+  }
+}
