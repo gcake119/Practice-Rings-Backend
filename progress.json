@@ -35,6 +35,20 @@
       "readingMinutes": 45,
       "writingMinutes": 30,
       "note": "純閱讀語言機制章節與寫學習筆記。"
+    },
+    "2025-12-03": {
+      "date": "2025-12-03",
+      "codingMinutes": 123,
+      "readingMinutes": 42,
+      "writingMinutes": 10,
+      "note": "haha"
+    },
+    "2025-12-04": {
+      "date": "2025-12-04",
+      "codingMinutes": 134,
+      "readingMinutes": 33,
+      "writingMinutes": 53,
+      "note": ""
     }
   }
 }
