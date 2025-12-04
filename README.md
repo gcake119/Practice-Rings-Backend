@@ -21,6 +21,10 @@ Practice Rings（修煉圈圈）後端服務，提供一組簡單的 RESTful API
 - 由後端負責讀寫 `progress.json`：
   - 本機開發：讀寫專案根目錄下的 `progress.json`。
   - Zeabur：透過 Volume 掛載到 `/data/progress.json`。
+- 登入與授權：
+  - 前端使用單一密碼呼叫 `POST /api/login` 取得 token，並在當次瀏覽工作階段內將 token 保存在前端記憶體狀態。
+  - 所有受保護 API（`/api/settings`、`/api/progress` 等）都必須透過 `Authorization: Bearer <token>` header 存取。
+  - 目前不實作重新整理後自動登入，重新開啟頁面時使用者需要再次輸入密碼取得新 token。
 
 ## 專案結構
 

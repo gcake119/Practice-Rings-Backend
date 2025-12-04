@@ -46,8 +46,7 @@
     - 後端從環境變數（例如 `APP_PASSWORD`）讀取正確密碼：
       - 密碼正確 → 產生一個簽章 token，回傳給前端。
       - 密碼錯誤 → 回傳 401。
-    - 前端將 token 儲存在 `localStorage`，之後所有 API 呼叫都透過 HTTP header 帶上：
-      - `Authorization: Bearer <token>`。
+    - 目前版本不實作自動登入／記住登入狀態：重新整理頁面或關閉瀏覽器後，使用者需要重新輸入密碼登入。
     - 後端會在讀寫 `progress.json` 前驗證 token，未通過一律回應 401。
   - **【Day 1 更新】載入動畫流程**：
     - 使用者按下「登入」按鈕後 → 顯示「鈴鐺轉圈圈」loading 動畫。
@@ -499,7 +498,7 @@ Authorization: Bearer <token>
     - 呼叫 `POST /api/login`。
     - 成功：
       - 隱藏 loading。
-      - 將回傳的 token 存入 `state.token` 與 `localStorage`。
+      - 前端於登入成功後將 token 存入前端狀態，並於本次瀏覽會話期間附帶在 API header 中，重新整理後需重新登入。
       - 設定 `state.isAuthenticated = true`。
       - 呼叫 `init()` 載入設定與今日／歷史紀錄。
       - 頁面轉為主畫面（Timer / Rings / Summary / History）。
@@ -562,6 +561,12 @@ Authorization: Bearer <token>
   - 實時計算 `totalPercentage = (codingMinutes + readingMinutes + writingMinutes) / 360 * 100`。
   - 依百分比區間顯示對應台詞（見 2.2.1 說明）。
   - 每當三項目時數更新（計時器結束 / 手動輸入成功）時，即時刷新台詞。
+- 「勵志文案的更新時機：
+  - 每當三個模式的今日分鐘數更新（包含計時器結束一段修煉、手動輸入時間成功加入、從後端重新載入今日紀錄）時，前端會呼叫統一的 `updateProgressUI()`，即時刷新：
+    - 三個主圈圈的百分比與 `current / goal` 顯示。
+    - 總時數三色進度條與完成百分比。
+    - 總體與各模式的 Doraemon 勵志台詞。
+  - 「儲存今天」按鈕僅負責將目前狀態寫回後端與更新歷史紀錄，不再作為勵志台詞更新的觸發點。」
 
 #### 5.2.5 Today Summary Section（今日摘要）
 

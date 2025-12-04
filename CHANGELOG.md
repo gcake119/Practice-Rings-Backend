@@ -12,3 +12,6 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - 調整前後端介面文件，將原本零散的需求整理為 Phase 2 單一規格文件。
+- 更新登入流程說明：
+  - 保留後端以 token 驗證受保護路由的機制，但前端不再將 token 存入 localStorage，自動登入行為暫不實作，使用者重新整理頁面後需再次登入。
+  
